@@ -13,6 +13,9 @@
 #pragma once
 
 #include <Windows.h>
+#include <string>
+
+bool checkIsInstalled(std::string & name);
 
 typedef enum WindowsVersion
 {
@@ -36,6 +39,12 @@ typedef enum WindowsVersion
     WindowsServer2008,
     WindowsServer2008R2,
     Windows7,
+    Windows8,
+    WindowsServer2012,
+    Windows8Point1,
+    WindowsServer2012R2,
+    Windows10,
+    WindowsServer2016TechnicalPreview
 };
 
 typedef enum WindowsEdition
@@ -202,10 +211,11 @@ private:
     void detectWindowsEdition();
     void detectWindowsServicePack();
     DWORD detectProductInfo();
+    bool getWinMajorMinorVersion(DWORD& major, DWORD& minor);
 
 private:
     WindowsVersion     m_nWinVersion;
-    WindowsEdition     m_nWinEdition;
+    WindowsEdition     m_nWinEdition;        // windows°æ±¾
     TCHAR              m_szServicePack[128];
     OSVERSIONINFOEX    m_osvi;
     SYSTEM_INFO        m_SysInfo;

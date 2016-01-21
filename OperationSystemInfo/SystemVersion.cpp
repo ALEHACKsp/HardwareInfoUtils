@@ -92,6 +92,14 @@ int main(int argc, char* argv[])
     case Windows7:
         cout << "Windows 7" << endl;
         break;
+
+    case Windows10:
+        cout << "Windows 10" << endl;
+        break;
+
+    case WindowsServer2016TechnicalPreview:
+        cout << "Windows 10 Server" << endl;
+        break;
     }
 
     switch (sysInfo.getWindowsEdition())
@@ -196,6 +204,9 @@ int main(int argc, char* argv[])
 
     cout << "32-bit platform: " << std::boolalpha << sysInfo.is32bitPlatform() << endl;
     cout << "64-bit platform: " << std::boolalpha << sysInfo.is64bitPlatform() << endl;
+
+    std::string softWareName = "360тфел";
+    cout << checkIsInstalled(softWareName);
 
     return 0;
 }

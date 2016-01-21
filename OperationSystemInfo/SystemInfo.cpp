@@ -6,8 +6,79 @@
 
 #include "SystemInfo.h"
 
+#include <lm.h>
 #include <tchar.h>
 #include <stdio.h>
+#include <iostream>
+
+#pragma comment(lib, "netapi32.lib")
+
+bool checkIsInstalled(std::string & name)
+{
+    HKEY hUninstKey = NULL;
+    HKEY hAppKey = NULL;
+    WCHAR sAppKeyName[1024] = { 0 };
+    WCHAR sSubKey[1024] = { 0 };
+    WCHAR sDisplayName[1024] = { 0 };
+    WCHAR *sRoot = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+    long lResult = ERROR_SUCCESS;
+    DWORD dwType = KEY_ALL_ACCESS;
+    DWORD dwBufferSize = 0;
+
+    //Open the "Uninstall" key.
+    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, sRoot, 0, KEY_READ, &hUninstKey) != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    for (DWORD dwIndex = 0; lResult == ERROR_SUCCESS; dwIndex++)
+    {
+        //Enumerate all sub keys...
+        dwBufferSize = sizeof(sAppKeyName);
+        if ((lResult = RegEnumKeyEx(hUninstKey, dwIndex, sAppKeyName,
+            &dwBufferSize, NULL, NULL, NULL, NULL)) == ERROR_SUCCESS)
+        {
+            //Open the sub key.
+            wsprintf(sSubKey, L"%s\\%s", sRoot, sAppKeyName);
+            if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, sSubKey, 0, KEY_READ, &hAppKey) != ERROR_SUCCESS)
+            {
+                RegCloseKey(hAppKey);
+                RegCloseKey(hUninstKey);
+                return false;
+            }
+
+            //Get the display name value from the application's sub key.
+            dwBufferSize = sizeof(sDisplayName);
+            LSTATUS status = RegQueryValueEx(hAppKey,
+                L"DisplayName",
+                NULL,
+                &dwType,
+                (unsigned char*)sDisplayName,
+                &dwBufferSize);
+            if (status == ERROR_SUCCESS)
+            {
+                setlocale(LC_ALL, "chs");
+                wprintf(L"%s\n", sDisplayName);
+                char ch[2048] = { 0 };
+                WideCharToMultiByte(CP_ACP, 0, sDisplayName, -1, ch, sizeof(ch), NULL, NULL);
+                std::string softWareName(ch);
+                if (name == ch)
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                //Display name value doe not exist, this application was probably uninstalled.
+            }
+
+            RegCloseKey(hAppKey);
+        }
+    }
+
+    RegCloseKey(hUninstKey);
+}
+
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
@@ -46,6 +117,29 @@ SystemInfo::SystemInfo()
         }
     }
     __pragma(warning(pop))
+
+    DWORD major = 0;
+    DWORD minor = 0;
+
+    if (getWinMajorMinorVersion(major, minor))
+    {
+        m_osvi.dwMajorVersion = major;
+        m_osvi.dwMinorVersion = minor;
+    }
+    else if (m_osvi.dwMajorVersion == 6 && m_osvi.dwMinorVersion == 2)
+    {
+        OSVERSIONINFOEXW osvi;
+        ULONGLONG cm = 0;
+        cm = VerSetConditionMask(cm, VER_MINORVERSION, VER_EQUAL);
+        ZeroMemory(&osvi, sizeof(osvi));
+        osvi.dwOSVersionInfoSize = sizeof(osvi);
+        osvi.dwMinorVersion = 3;
+
+        if (VerifyVersionInfoW(&osvi, VER_MINORVERSION, cm))
+        {
+            m_osvi.dwMinorVersion = 3;
+        }
+    }
 
     pGNSI = (PGetNativeSystemInfo)GetProcAddress(GetModuleHandle(_T("kernel32.dll")),
                                                  "GetNativeSystemInfo");
@@ -176,7 +270,6 @@ void SystemInfo::detectWindowsVersion()
                 }
                 break;
                 }
-
             }
             break;
 
@@ -186,19 +279,41 @@ void SystemInfo::detectWindowsVersion()
                 {
                 case 0:
                 {
-                    m_nWinVersion = m_osvi.wProductType == VER_NT_WORKSTATION ?
-                    WindowsVista :
-                                 WindowsServer2008;
+                    m_nWinVersion = m_osvi.wProductType == VER_NT_WORKSTATION ? WindowsVista : WindowsServer2008;
                 }
                 break;
 
                 case 1:
                 {
-                    m_nWinVersion = m_osvi.wProductType == VER_NT_WORKSTATION ?
-                    Windows7 :
-                             WindowsServer2008R2;
+                    m_nWinVersion = m_osvi.wProductType == VER_NT_WORKSTATION ? Windows7 : WindowsServer2008R2;
                 }
                 break;
+
+                case 2:
+                {
+                    m_nWinVersion = m_osvi.wProductType == VER_NT_WORKSTATION ? Windows8 : WindowsServer2012;
+                }
+                break;
+
+                case 3:
+                {
+                    m_nWinVersion = m_osvi.wProductType == VER_NT_WORKSTATION ? Windows8Point1 : WindowsServer2012R2;
+                }
+                break;
+                }
+            }
+            break;
+
+            case 10:
+            {
+                switch (m_osvi.dwMinorVersion)
+                {
+                case 0:
+                {
+                    m_nWinVersion = m_osvi.wProductType == VER_NT_WORKSTATION ? Windows10 : WindowsServer2016TechnicalPreview;
+                }
+                break;
+
                 }
             }
             break;
@@ -210,12 +325,12 @@ void SystemInfo::detectWindowsVersion()
     else // Test for specific product on Windows NT 4.0 SP5 and earlier
     {
         HKEY hKey;
-        char szProductType[BUFSIZE];
+        WCHAR szProductType[BUFSIZE];
         DWORD dwBufLen = BUFSIZE;
         LONG lRet;
 
         lRet = RegOpenKeyEx(HKEY_LOCAL_MACHINE,
-                            "SYSTEM\\CurrentControlSet\\Control\\ProductOptions",
+                            L"SYSTEM\\CurrentControlSet\\Control\\ProductOptions",
                             0,
                             KEY_QUERY_VALUE, &hKey);
 
@@ -225,7 +340,7 @@ void SystemInfo::detectWindowsVersion()
         }
 
         lRet = RegQueryValueEx(hKey,
-                               "ProductType",
+                               L"ProductType",
                                NULL,
                                NULL,
                                (LPBYTE)szProductType,
@@ -238,7 +353,7 @@ void SystemInfo::detectWindowsVersion()
 
         RegCloseKey(hKey);
 
-        if (lstrcmpi("WINNT", szProductType) == 0)
+        if (lstrcmpi(L"WINNT", szProductType) == 0)
         {
             if (m_osvi.dwMajorVersion <= 4)
             {
@@ -247,7 +362,7 @@ void SystemInfo::detectWindowsVersion()
             }
         }
 
-        if (lstrcmpi("LANMANNT", szProductType) == 0)
+        if (lstrcmpi(L"LANMANNT", szProductType) == 0)
         {
             if (m_osvi.dwMajorVersion == 5 && m_osvi.dwMinorVersion == 2)
             {
@@ -267,7 +382,7 @@ void SystemInfo::detectWindowsVersion()
             }
         }
 
-        if (lstrcmpi("SERVERNT", szProductType) == 0)
+        if (lstrcmpi(L"SERVERNT", szProductType) == 0)
         {
             if (m_osvi.dwMajorVersion == 5 && m_osvi.dwMinorVersion == 2)
             {
@@ -370,6 +485,7 @@ void SystemInfo::detectWindowsEdition()
         break;
 
         case 6:
+        case 10:
         {
             DWORD dwReturnedProductType = detectProductInfo();
             switch (dwReturnedProductType)
@@ -670,26 +786,26 @@ void SystemInfo::detectWindowsServicePack()
 {
     // Display service pack (if any) and build number.
     if (m_osvi.dwMajorVersion == 4 &&
-        lstrcmpi(m_osvi.szCSDVersion, "Service Pack 6") == 0)
+        lstrcmpi(m_osvi.szCSDVersion, L"Service Pack 6") == 0)
     {
         HKEY hKey;
         LONG lRet;
 
         // Test for SP6 versus SP6a.
         lRet = RegOpenKeyEx(HKEY_LOCAL_MACHINE,
-                            "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Hotfix\\Q246009",
+                            L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Hotfix\\Q246009",
                             0,
                             KEY_QUERY_VALUE,
                             &hKey);
 
         if (lRet == ERROR_SUCCESS)
         {
-            sprintf_s(m_szServicePack, "Service Pack 6a (Build %d)\n", m_osvi.dwBuildNumber & 0xFFFF);
+            wsprintf(m_szServicePack, L"Service Pack 6a (Build %d)\n", m_osvi.dwBuildNumber & 0xFFFF);
         }
         else
         {
             // Windows NT 4.0 prior to SP6a
-            sprintf_s(m_szServicePack, "%s (Build %d)\n",
+            wsprintf(m_szServicePack, L"%s (Build %d)\n",
                 m_osvi.szCSDVersion,
                 m_osvi.dwBuildNumber & 0xFFFF);
         }
@@ -698,7 +814,7 @@ void SystemInfo::detectWindowsServicePack()
     }
     else // Windows NT 3.51 and earlier or Windows 2000 and later
     {
-        sprintf_s(m_szServicePack, "%s (Build %d)\n",
+        wsprintf(m_szServicePack, L"%s (Build %d)\n",
             m_osvi.szCSDVersion,
             m_osvi.dwBuildNumber & 0xFFFF);
     }
@@ -726,6 +842,23 @@ DWORD SystemInfo::detectProductInfo()
 #endif
 
     return dwProductInfo;
+}
+
+bool SystemInfo::getWinMajorMinorVersion(DWORD& major, DWORD& minor)
+{
+    bool bRetCode = false;
+    LPBYTE pinfoRawData = 0;
+
+    if (NERR_Success == NetWkstaGetInfo(NULL, 100, &pinfoRawData))
+    {
+        WKSTA_INFO_100* pworkstationInfo = (WKSTA_INFO_100*)pinfoRawData;
+        major = pworkstationInfo->wki100_ver_major;
+        minor = pworkstationInfo->wki100_ver_minor;
+        ::NetApiBufferFree(pinfoRawData);
+        bRetCode = true;
+    }
+
+    return bRetCode;
 }
 
 WindowsVersion SystemInfo::getWindowsVersion() const
