@@ -13,6 +13,10 @@
 
 #pragma comment(lib, "netapi32.lib")
 
+#define BUFSIZE 80
+typedef void (WINAPI *PGetNativeSystemInfo)(LPSYSTEM_INFO);
+typedef BOOL(WINAPI *PGetProductInfo)(DWORD, DWORD, DWORD, DWORD, PDWORD);
+
 bool checkIsInstalled(std::string & name)
 {
     HKEY hUninstKey = NULL;
@@ -50,44 +54,33 @@ bool checkIsInstalled(std::string & name)
             //Get the display name value from the application's sub key.
             dwBufferSize = sizeof(sDisplayName);
             LSTATUS status = RegQueryValueEx(hAppKey,
-                L"DisplayName",
-                NULL,
-                &dwType,
-                (unsigned char*)sDisplayName,
-                &dwBufferSize);
+                                             L"DisplayName",
+                                             NULL,
+                                             &dwType,
+                                             (unsigned char*)sDisplayName,
+                                             &dwBufferSize);
             if (status == ERROR_SUCCESS)
             {
-                setlocale(LC_ALL, "chs");
-                wprintf(L"%s\n", sDisplayName);
-                char ch[2048] = { 0 };
-                WideCharToMultiByte(CP_ACP, 0, sDisplayName, -1, ch, sizeof(ch), NULL, NULL);
-                std::string softWareName(ch);
-                if (name == ch)
+                char softwareName[2048] = { 0 };
+                WideCharToMultiByte(CP_ACP, 0, sDisplayName, -1, softwareName, sizeof(softwareName), NULL, NULL);
+
+                if (name == softwareName)
                 {
+                    RegCloseKey(hAppKey);
+                    RegCloseKey(hUninstKey);
                     return true;
                 }
             }
             else
             {
-                //Display name value doe not exist, this application was probably uninstalled.
+                RegCloseKey(hAppKey);
             }
-
-            RegCloseKey(hAppKey);
         }
     }
 
     RegCloseKey(hUninstKey);
+    return false;
 }
-
-//////////////////////////////////////////////////////////////////////
-// Construction/Destruction
-//////////////////////////////////////////////////////////////////////
-#define BUFSIZE 80
-
-typedef void (WINAPI *PGetNativeSystemInfo)(LPSYSTEM_INFO);
-
-typedef BOOL(WINAPI *PGetProductInfo)(DWORD, DWORD, DWORD, DWORD, PDWORD);
-
 
 SystemInfo::SystemInfo()
 {
@@ -104,10 +97,9 @@ SystemInfo::SystemInfo()
     m_osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
 
     __pragma(warning(push))
-    __pragma(warning(disable : 4996))
+    __pragma(warning(disable:4996))
     if (!(m_bOsVersionInfoEx = GetVersionEx((OSVERSIONINFO *)&m_osvi)))
     {
-        
         // If that fails, try using the OSVERSIONINFO structure.
         m_osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
 
@@ -234,6 +226,7 @@ void SystemInfo::detectWindowsVersion()
                 case 1:
                     m_nWinVersion = WindowsNT40;
                     break;
+
                 case 3:
                     m_nWinVersion = WindowsNT40Server;
                     break;
@@ -594,7 +587,7 @@ void SystemInfo::detectWindowsEdition()
                 m_nWinEdition = SmallBusinessServerPremium;
                 break;
 
-#if _WIN32_WINNT >= 0x0601 // windows 7
+#if _WIN32_WINNT >= 0x0601 // windows 7ртио
             case PRODUCT_HOME_PREMIUM_N:
                 m_nWinEdition = HomePremium_N;
                 break;
@@ -800,23 +793,27 @@ void SystemInfo::detectWindowsServicePack()
 
         if (lRet == ERROR_SUCCESS)
         {
-            wsprintf(m_szServicePack, L"Service Pack 6a (Build %d)\n", m_osvi.dwBuildNumber & 0xFFFF);
+            wsprintf(m_szServicePack,
+                     L"Service Pack 6a (Build %d)\n",
+                     m_osvi.dwBuildNumber & 0xFFFF);
         }
         else
         {
             // Windows NT 4.0 prior to SP6a
-            wsprintf(m_szServicePack, L"%s (Build %d)\n",
-                m_osvi.szCSDVersion,
-                m_osvi.dwBuildNumber & 0xFFFF);
+            wsprintf(m_szServicePack,
+                     L"%s (Build %d)\n",
+                     m_osvi.szCSDVersion,
+                     m_osvi.dwBuildNumber & 0xFFFF);
         }
 
         RegCloseKey(hKey);
     }
     else // Windows NT 3.51 and earlier or Windows 2000 and later
     {
-        wsprintf(m_szServicePack, L"%s (Build %d)\n",
-            m_osvi.szCSDVersion,
-            m_osvi.dwBuildNumber & 0xFFFF);
+        wsprintf(m_szServicePack,
+                 L"%s (Build %d)\n",
+                 m_osvi.szCSDVersion,
+                 m_osvi.dwBuildNumber & 0xFFFF);
     }
 }
 

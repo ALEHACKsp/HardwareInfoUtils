@@ -92,9 +92,11 @@ int main(int argc, char* argv[])
     case Windows7:
         cout << "Windows 7" << endl;
         break;
+    case Windows8Point1:
+        cout << "Windows 8.1" << endl;
 
     case Windows10:
-        cout << "Windows 10" << endl;
+        cout << "Windows 10 ";
         break;
 
     case WindowsServer2016TechnicalPreview:
@@ -138,6 +140,10 @@ int main(int argc, char* argv[])
 
     case Enterprise:
         cout << "Enterprise Edition" << endl;
+        break;
+
+    case Professional:
+        cout << "Professional Edition" << endl;
         break;
 
     case HomeBasic_N:
@@ -205,7 +211,9 @@ int main(int argc, char* argv[])
     cout << "32-bit platform: " << std::boolalpha << sysInfo.is32bitPlatform() << endl;
     cout << "64-bit platform: " << std::boolalpha << sysInfo.is64bitPlatform() << endl;
 
-    std::string softWareName = "360云盘";
+    std::string softWareName1 = "360云盘";
+    std::string softWareName2 = "Microsoft Visual Studio Professional 2015 - 简体中文"; 
+    std::string softWareName = "支付宝安全控件 5.3.0.3807";
     cout << checkIsInstalled(softWareName);
 
     return 0;
